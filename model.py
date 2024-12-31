@@ -13,7 +13,9 @@ class A3CModel(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        policy = F.softmax(self.policy_head(x), dim=-1)
+        #policy = torch.tanh(self.policy_head(x))
+        policy = self.policy_head(x)
+        print(policy)
         value = self.value_head(x)
         return policy, value
 
