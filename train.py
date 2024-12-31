@@ -6,6 +6,8 @@ import torch.multiprocessing as mp
 from model import A3CModel
 import shutil
 import os
+import matplotlib.pyplot as plt  # 追加
+import random  # 追加
 
 
 def worker(
@@ -17,6 +19,7 @@ def worker(
     conn,
     video_folder="videos",
     video_interval=100,
+    gamma=0.99,
 ):
     if worker_id == 0:
         env = gym.make(env_name, render_mode="rgb_array")
@@ -38,8 +41,10 @@ def worker(
         while not (terminated or truncated):
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
             policy, value = local_model.forward(state_tensor)
+            
             action = policy.detach().numpy()[0]
             action = env.action_space.high * action
+            
             next_state, reward, terminated, truncated, _ = env.step(action)
             total_reward += reward
 
@@ -49,13 +54,22 @@ def worker(
             done_tensor = torch.tensor([terminated or truncated], dtype=torch.float32)
 
             loss = local_model.compute_loss(
-                policy, reward_tensor, value, next_value, done_tensor
+                policy, reward_tensor, value, next_value, done_tensor, gamma
             )
-            local_model.backward(optimizer, loss)
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(local_model.parameters(), 40)
+            with torch.no_grad():
+                for local_param, global_param in zip(local_model.parameters(), global_model.parameters()):
+                    if global_param.grad is None:
+                        global_param.grad = local_param.grad.clone()
+                    else:
+                        global_param.grad += local_param.grad
+            optimizer.step()
 
             state = next_state
 
-        global_model.load_state_dict(local_model.state_dict())
+        local_model.load_state_dict(global_model.state_dict())
 
         conn.send((worker_id, episode + 1, total_reward))
     conn.close()
@@ -65,8 +79,8 @@ def worker(
 def train(
     env_name="Pendulum-v1",
     num_episodes=10000,
-    learning_rate=0.001,
-    num_workers=4,
+    learning_rate=0.002,
+    num_workers=8,
     video_folder="videos",
     video_interval=100,
 ):
@@ -79,6 +93,14 @@ def train(
     optimizer = optim.Adam(global_model.parameters(), lr=learning_rate)
     processes = []
     parent_conns, child_conns = zip(*[mp.Pipe() for _ in range(num_workers)])
+    rewards = []  # 報酬を記録するリスト
+
+    plt.ion()  # インタラクティブモードを有効にする
+    fig, ax = plt.subplots()
+    line, = ax.plot(rewards)
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Total Reward')
+    ax.set_title('Total Reward per Episode')
 
     for worker_id in range(num_workers):
         p = mp.Process(
@@ -100,13 +122,25 @@ def train(
     for episode in range(num_episodes):
         for parent_conn in parent_conns:
             worker_id, ep, total_reward = parent_conn.recv()
+            rewards.append(total_reward)  # 報酬を記録
             print(
                 f"Worker {worker_id}, Episode {ep}/{num_episodes}, Total Reward: {total_reward:.2f}"
             )
 
+            # グラフを更新
+            line.set_ydata(rewards)
+            line.set_xdata(range(len(rewards)))
+            ax.relim()
+            ax.autoscale_view()
+            plt.draw()
+            plt.pause(0.01)
+
     for p in processes:
         p.join()
 
+    plt.ioff()
+    plt.savefig('reward.png')
+    plt.show()
 
 if __name__ == "__main__":
     mp.set_start_method("spawn")
