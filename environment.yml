@@ -1,0 +1,11 @@
+name: gymnasium
+channels:
+  - defaults
+dependencies:
+  - python=3.10.12
+  - pip
+  - pip:
+    - gymnasium[other]==1.0.0
+    - gymnasium[classic-control]==1.0.0
+    - matplotlib==3.10.0
+    - torch==2.5.1
