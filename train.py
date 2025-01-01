@@ -6,8 +6,7 @@ import torch.multiprocessing as mp
 from model import A3CModel
 import shutil
 import os
-import matplotlib.pyplot as plt  # 追加
-import random  # 追加
+import matplotlib.pyplot as plt
 
 
 def worker(
@@ -58,7 +57,7 @@ def worker(
             )
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(local_model.parameters(), 40)
+            torch.nn.utils.clip_grad_norm_(local_model.parameters(), 20)
             with torch.no_grad():
                 for local_param, global_param in zip(local_model.parameters(), global_model.parameters()):
                     if global_param.grad is None:
