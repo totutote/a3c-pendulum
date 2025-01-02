@@ -11,11 +11,11 @@ class A3CModel(nn.Module):
         self.value_head = nn.Linear(hidden_size, 1)
 
     def forward(self, state):
-        x = torch.tanh(self.fc1(state))
-        x = torch.tanh(self.fc2(x))
-        #policy = torch.tanh(self.policy_head(x))
+        x = self.fc1(state)
+        x = torch.tanh(x)
+        x = self.fc2(x)
+        x = torch.tanh(x)
         policy = self.policy_head(x)
-        #print(policy)
         value = self.value_head(x)
         return policy, value
 

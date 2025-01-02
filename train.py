@@ -8,7 +8,6 @@ import shutil
 import os
 import matplotlib.pyplot as plt
 
-
 def worker(
     global_model,
     optimizer,
@@ -36,6 +35,7 @@ def worker(
         state, _ = env.reset()
         terminated, truncated = False, False
         total_reward = 0
+        accumulated_loss = 0
 
         while not (terminated or truncated):
             state_tensor = torch.FloatTensor(state).unsqueeze(0)
@@ -65,12 +65,12 @@ def worker(
                     else:
                         global_param.grad += local_param.grad
             optimizer.step()
+            accumulated_loss += loss.item()
 
             state = next_state
-
         local_model.load_state_dict(global_model.state_dict())
 
-        conn.send((worker_id, episode + 1, total_reward))
+        conn.send((worker_id, episode + 1, total_reward, accumulated_loss))
     conn.close()
     env.close()
 
@@ -120,15 +120,15 @@ def train(
 
     for episode in range(num_episodes):
         for parent_conn in parent_conns:
-            worker_id, ep, total_reward = parent_conn.recv()
+            worker_id, ep, total_reward, accumulated_loss = parent_conn.recv()
             rewards.append(total_reward)  # 報酬を記録
             print(
-                f"Worker {worker_id}, Episode {ep}/{num_episodes}, Total Reward: {total_reward:.2f}"
+                f"Worker {worker_id}, Episode {ep}/{num_episodes}, Total Reward: {total_reward:.2f}, Accumulated Loss: {accumulated_loss:.2f}"
             )
 
             # グラフを更新
             line.set_ydata(rewards)
-            line.set_xdata(range(len(rewards)))
+            line.set_xdata([i / num_workers for i in range(len(rewards))])
             ax.relim()
             ax.autoscale_view()
             plt.draw()
