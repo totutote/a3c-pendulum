@@ -30,7 +30,6 @@ def run(model_path, video_folder='videos'):
         # アクションの選択
         action, _ = model.forward(state_tensor)
         action = action.detach().numpy()[0]
-        action = env.action_space.high * action  # アクションのスケーリング
         
         # 環境でアクションを実行
         state, reward, terminated, truncated, _ = env.step(action)
